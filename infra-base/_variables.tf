@@ -68,22 +68,3 @@ variable "horizon_days" {
 variable "allow_drift_minutes" {
   type = string
 }
-
-variable "eventgrid_included_event_types" {
-  description = "Optional list of included event types."
-  type        = list(string)
-  default     = ["Microsoft.Resources.ResourceWriteSuccess"]
-}
-
-variable "eventgrid_function_name" {
-  description = "Azure Function name (the function inside the app) that has the EventGridTrigger."
-  type        = string
-  default     = "TagIngest"
-}
-
-variable "enable_eventgrid_subscription" {
-  description = "Create the Event Grid subscription. Set to true only after function code is deployed and registered in ARM."
-  type        = bool
-  default     = false
-}
-

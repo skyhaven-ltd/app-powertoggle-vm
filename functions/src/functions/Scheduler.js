@@ -35,7 +35,7 @@ async function deallocateVm(resourceId) {
 
 app.timer("Scheduler", {
   schedule: "0 * * * * *", // every minute
-  handler: async (myTimer, context) => {
+  handler: async (_myTimer, context) => {
     const tablesUrl = process.env.TABLES_URL;
     const drift = parseInt(process.env.ALLOW_DRIFT_MINUTES || "1", 10);
     if (!tablesUrl) return;

@@ -5,7 +5,7 @@ const { TableClient } = require("@azure/data-tables");
 const { DefaultAzureCredential } = require("@azure/identity");
 const { ComputeManagementClient } = require("@azure/arm-compute");
 const { DateTime } = require("luxon");
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 
 function parseVmId(resourceId) {
   const parts = resourceId.split("/");

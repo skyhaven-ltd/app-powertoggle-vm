@@ -1,5 +1,5 @@
 name: "Terraform Run"
-description: "Initialises Terraform and runs a given command (plan, apply, or destroy)"
+description: "Initialises a selected Terraform stack and runs a given command (plan, apply, or destroy)"
 
 inputs:
   command:
@@ -8,6 +8,14 @@ inputs:
   env:
     description: "Environment token (dev, prd)"
     required: true
+  working_directory:
+    description: "Terraform working directory for the target stack"
+    required: false
+    default: "infra-base"
+  state_key:
+    description: "Blob key used for the Terraform state file"
+    required: false
+    default: "infra-base.tfstate"
   extra_args:
     description: "Extra arguments appended to the Terraform command"
     required: false
@@ -55,12 +63,14 @@ runs:
         TF_ENV: ${{ inputs.env }}
         REPO_NAME: ${{ inputs.repo_name }}
         PLATFORM_SUB: ${{ inputs.azure_platform_subscription_id }}
+        TF_STATE_KEY: ${{ inputs.state_key }}
+        TF_WORKING_DIRECTORY: ${{ inputs.working_directory }}
       run: |
-        terraform -chdir=infra init \
+        terraform -chdir="$TF_WORKING_DIRECTORY" init \
           -backend-config="resource_group_name=rg-tfs-platform-$TF_ENV-uks-01" \
           -backend-config="storage_account_name=sttfsplatform${TF_ENV}uks01" \
           -backend-config="container_name=$REPO_NAME" \
-          -backend-config="key=terraform.tfstate" \
+          -backend-config="key=$TF_STATE_KEY" \
           -backend-config="subscription_id=$PLATFORM_SUB"
 
     - name: "Terraform ${{ inputs.command }}"
@@ -69,8 +79,9 @@ runs:
         TF_ENV: ${{ inputs.env }}
         TF_COMMAND: ${{ inputs.command }}
         EXTRA_ARGS: ${{ inputs.extra_args }}
+        TF_WORKING_DIRECTORY: ${{ inputs.working_directory }}
       run: |
-        terraform -chdir=infra $TF_COMMAND \
+        terraform -chdir="$TF_WORKING_DIRECTORY" $TF_COMMAND \
           -var-file="vars/globals.tfvars" \
           -var-file="vars/$TF_ENV.tfvars" \
           $EXTRA_ARGS
@@ -81,6 +92,7 @@ runs:
       with:
         storage_account_name: sttfsplatform${{ inputs.env }}uks01
         container_name: ${{ inputs.repo_name }}
+        state_key: ${{ inputs.state_key }}
         azure_client_id: ${{ inputs.azure_client_id }}
         azure_tenant_id: ${{ inputs.azure_tenant_id }}
         azure_subscription_id: ${{ inputs.azure_platform_subscription_id }}

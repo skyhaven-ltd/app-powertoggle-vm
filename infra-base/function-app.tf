@@ -34,4 +34,3 @@ resource "azurerm_function_app_flex_consumption" "func" {
 
   tags = local.tags
 }
-
