@@ -63,7 +63,7 @@ function buildOccurrences(
 
 app.timer("DailyExtend", {
   schedule: "0 5 0 * * *", // 00:05 UTC daily
-  handler: async (myTimer, context) => {
+  handler: async (_myTimer, context) => {
     const tablesUrl = process.env.TABLES_URL;
     const tz = process.env.DEFAULT_TZ || "Europe/London";
     const horizonDays = parseInt(process.env.HORIZON_DAYS || "7", 10);

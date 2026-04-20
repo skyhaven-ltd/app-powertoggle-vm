@@ -1,0 +1,244 @@
+name: "Terraform"
+
+on:
+  push:
+    branches:
+      - "major/**"
+      - "minor/**"
+      - "patch/**"
+    paths:
+      - ".github/actions/**"
+      - ".github/workflows/terraform.yml"
+      - "infra-base/**"
+      - "infra-eventgrid/**"
+      - "functions/**"
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment"
+        type: choice
+        default: dev
+        options:
+          - dev
+          - prd
+      terraform_action:
+        description: "Terraform Action"
+        type: choice
+        default: plan
+        options:
+          - plan
+          - apply
+          - destroy
+
+permissions:
+  contents: read
+
+jobs:
+  build-functions:
+    name: "Build Functions"
+    if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: "Build Functions"
+        run: |
+          set -euo pipefail
+          cd functions/src
+          npm ci
+          npm run build --if-present
+          npm prune --omit=dev
+
+      - name: "Zip Functions"
+        run: |
+          cd functions/src
+          zip -r ${{ runner.temp }}/functionapp.zip .
+
+      - name: "Upload Artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: functionapp
+          path: ${{ runner.temp }}/functionapp.zip
+          retention-days: 1
+
+  plan:
+    name: "Terraform Plan (${{ inputs.env || 'dev' }})"
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'plan')
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env || 'dev' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Terraform Plan - Base Stack"
+        uses: ./.github/actions/terraform-run
+        with:
+          command: plan
+          env: ${{ inputs.env || 'dev' }}
+          working_directory: infra-base
+          state_key: infra-base.tfstate
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_platform_subscription_id: ${{ secrets.AZURE_PLATFORM_SUBSCRIPTION_ID }}
+          repo_name: ${{ github.event.repository.name }}
+
+      - name: "Terraform Plan - Event Grid Stack"
+        uses: ./.github/actions/terraform-run
+        with:
+          command: plan
+          env: ${{ inputs.env || 'dev' }}
+          working_directory: infra-eventgrid
+          state_key: infra-eventgrid.tfstate
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_platform_subscription_id: ${{ secrets.AZURE_PLATFORM_SUBSCRIPTION_ID }}
+          repo_name: ${{ github.event.repository.name }}
+
+  apply:
+    name: "Terraform Apply (${{ inputs.env || 'dev' }})"
+    if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'apply'
+    needs: build-functions
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env || 'dev' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      EVENTGRID_FUNCTION_NAME: TagIngest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Download Functions Artifact"
+        uses: actions/download-artifact@v4
+        with:
+          name: functionapp
+          path: ${{ runner.temp }}
+
+      - name: "Terraform Apply - Base Stack"
+        uses: ./.github/actions/terraform-run
+        with:
+          command: apply
+          env: ${{ inputs.env || 'dev' }}
+          working_directory: infra-base
+          state_key: infra-base.tfstate
+          extra_args: "-auto-approve"
+          terraform_wrapper: "false"
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_platform_subscription_id: ${{ secrets.AZURE_PLATFORM_SUBSCRIPTION_ID }}
+          repo_name: ${{ github.event.repository.name }}
+
+      - name: "Azure Login"
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: "Deploy Function App Code"
+        run: |
+          az functionapp deployment source config-zip \
+            --resource-group "$(terraform -chdir=infra-base output -raw resource_group_name)" \
+            --name "$(terraform -chdir=infra-base output -raw function_app_name)" \
+            --src "${{ runner.temp }}/functionapp.zip"
+
+      - name: "Wait for Function Registration in ARM"
+        run: |
+          set -euo pipefail
+
+          RG="$(terraform -chdir=infra-base output -raw resource_group_name)"
+          APP="$(terraform -chdir=infra-base output -raw function_app_name)"
+          SUB_ID="$(az account show --query id -o tsv)"
+          FUNC_NAME="$EVENTGRID_FUNCTION_NAME"
+
+          for i in $(seq 1 60); do
+            if az rest --method get \
+              --url "https://management.azure.com/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.Web/sites/${APP}/functions/${FUNC_NAME}?api-version=2022-03-01" \
+              >/dev/null 2>&1; then
+              echo "Function ${FUNC_NAME} is now visible in ARM"
+              exit 0
+            fi
+            echo "Waiting for function to be visible... (attempt $i/60)"
+            sleep 10
+          done
+
+          echo "::error::Function not visible in ARM after 10 minutes"
+          exit 1
+
+      - name: "Terraform Apply - Event Grid Stack"
+        uses: ./.github/actions/terraform-run
+        with:
+          command: apply
+          env: ${{ inputs.env || 'dev' }}
+          working_directory: infra-eventgrid
+          state_key: infra-eventgrid.tfstate
+          extra_args: "-auto-approve"
+          terraform_wrapper: "false"
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_platform_subscription_id: ${{ secrets.AZURE_PLATFORM_SUBSCRIPTION_ID }}
+          repo_name: ${{ github.event.repository.name }}
+
+  destroy:
+    name: "Terraform Destroy (${{ inputs.env || 'dev' }})"
+    if: github.event_name == 'workflow_dispatch' && inputs.terraform_action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env || 'dev' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Terraform Destroy - Event Grid Stack"
+        uses: ./.github/actions/terraform-run
+        with:
+          command: destroy
+          env: ${{ inputs.env || 'dev' }}
+          working_directory: infra-eventgrid
+          state_key: infra-eventgrid.tfstate
+          extra_args: "-auto-approve"
+          terraform_wrapper: "false"
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_platform_subscription_id: ${{ secrets.AZURE_PLATFORM_SUBSCRIPTION_ID }}
+          repo_name: ${{ github.event.repository.name }}
+
+      - name: "Terraform Destroy - Base Stack"
+        uses: ./.github/actions/terraform-run
+        with:
+          command: destroy
+          env: ${{ inputs.env || 'dev' }}
+          working_directory: infra-base
+          state_key: infra-base.tfstate
+          extra_args: "-auto-approve"
+          terraform_wrapper: "false"
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_platform_subscription_id: ${{ secrets.AZURE_PLATFORM_SUBSCRIPTION_ID }}
+          repo_name: ${{ github.event.repository.name }}
