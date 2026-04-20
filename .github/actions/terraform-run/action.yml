@@ -1,0 +1,86 @@
+name: "Terraform Run"
+description: "Initialises Terraform and runs a given command (plan, apply, or destroy)"
+
+inputs:
+  command:
+    description: "Terraform command to run (plan, apply, destroy)"
+    required: true
+  env:
+    description: "Environment token (dev, prd)"
+    required: true
+  extra_args:
+    description: "Extra arguments appended to the Terraform command"
+    required: false
+    default: ""
+  terraform_wrapper:
+    description: "Enable Terraform wrapper (disable for apply/destroy to get raw exit codes)"
+    required: false
+    default: "true"
+  azure_client_id:
+    description: "Azure client ID for OIDC login"
+    required: true
+  azure_tenant_id:
+    description: "Azure tenant ID for OIDC login"
+    required: true
+  azure_subscription_id:
+    description: "Workload Azure subscription ID"
+    required: true
+  azure_platform_subscription_id:
+    description: "Platform Azure subscription ID (state storage)"
+    required: true
+  repo_name:
+    description: "Repository name used as state container name"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: "Setup Terraform"
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+      with:
+        terraform_wrapper: ${{ inputs.terraform_wrapper }}
+
+    - name: "Ensure State Container"
+      uses: ./.github/actions/ensure-tfstate-container
+      with:
+        storage_account_name: sttfsplatform${{ inputs.env }}uks01
+        container_name: ${{ inputs.repo_name }}
+        azure_client_id: ${{ inputs.azure_client_id }}
+        azure_tenant_id: ${{ inputs.azure_tenant_id }}
+        azure_subscription_id: ${{ inputs.azure_platform_subscription_id }}
+
+    - name: "Terraform Init"
+      shell: bash
+      env:
+        TF_ENV: ${{ inputs.env }}
+        REPO_NAME: ${{ inputs.repo_name }}
+        PLATFORM_SUB: ${{ inputs.azure_platform_subscription_id }}
+      run: |
+        terraform -chdir=infra init \
+          -backend-config="resource_group_name=rg-tfs-platform-$TF_ENV-uks-01" \
+          -backend-config="storage_account_name=sttfsplatform${TF_ENV}uks01" \
+          -backend-config="container_name=$REPO_NAME" \
+          -backend-config="key=terraform.tfstate" \
+          -backend-config="subscription_id=$PLATFORM_SUB"
+
+    - name: "Terraform ${{ inputs.command }}"
+      shell: bash
+      env:
+        TF_ENV: ${{ inputs.env }}
+        TF_COMMAND: ${{ inputs.command }}
+        EXTRA_ARGS: ${{ inputs.extra_args }}
+      run: |
+        terraform -chdir=infra $TF_COMMAND \
+          -var-file="vars/globals.tfvars" \
+          -var-file="vars/$TF_ENV.tfvars" \
+          $EXTRA_ARGS
+
+    - name: "Break State Lease"
+      if: always()
+      uses: ./.github/actions/break-tfstate-lease
+      with:
+        storage_account_name: sttfsplatform${{ inputs.env }}uks01
+        container_name: ${{ inputs.repo_name }}
+        azure_client_id: ${{ inputs.azure_client_id }}
+        azure_tenant_id: ${{ inputs.azure_tenant_id }}
+        azure_subscription_id: ${{ inputs.azure_platform_subscription_id }}
