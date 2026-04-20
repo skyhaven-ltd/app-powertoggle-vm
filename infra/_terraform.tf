@@ -12,9 +12,5 @@ terraform {
       source  = "hashicorp/azuread"
       version = "~> 3.3"
     }
-    null = {
-      source  = "hashicorp/null"
-      version = "~> 3.2"
-    }
   }
 }

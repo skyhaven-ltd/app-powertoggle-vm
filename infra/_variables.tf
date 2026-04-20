@@ -81,8 +81,9 @@ variable "eventgrid_function_name" {
   default     = "TagIngest"
 }
 
-variable "function_zip_path" {
-  description = "Local path to the function app zip package. When set, code is deployed and the Event Grid subscription is created."
-  type        = string
-  default     = null
+variable "enable_eventgrid_subscription" {
+  description = "Create the Event Grid subscription. Set to true only after function code is deployed and registered in ARM."
+  type        = bool
+  default     = false
 }
+

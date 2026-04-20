@@ -35,38 +35,3 @@ resource "azurerm_function_app_flex_consumption" "func" {
   tags = local.tags
 }
 
-resource "null_resource" "function_deploy" {
-  count = var.function_zip_path != null ? 1 : 0
-
-  triggers = {
-    function_app_id = azurerm_function_app_flex_consumption.func.id
-    zip_path        = var.function_zip_path
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      set -euo pipefail
-
-      az functionapp deployment source config-zip \
-        --resource-group ${azurerm_resource_group.rg.name} \
-        --name ${azurerm_function_app_flex_consumption.func.name} \
-        --src ${var.function_zip_path}
-
-      SUB_ID="$(az account show --query id -o tsv)"
-      for i in $(seq 1 60); do
-        if az rest --method get \
-          --url "https://management.azure.com/subscriptions/$${SUB_ID}/resourceGroups/${azurerm_resource_group.rg.name}/providers/Microsoft.Web/sites/${azurerm_function_app_flex_consumption.func.name}/functions/${var.eventgrid_function_name}?api-version=2022-03-01" \
-          >/dev/null 2>&1; then
-          echo "Function ${var.eventgrid_function_name} is now visible in ARM"
-          exit 0
-        fi
-        echo "Waiting for function to be visible... (attempt $i/60)"
-        sleep 10
-      done
-      echo "Function not visible in ARM after 10 minutes"
-      exit 1
-    EOT
-  }
-
-  depends_on = [azurerm_function_app_flex_consumption.func]
-}

@@ -11,7 +11,7 @@ resource "azurerm_eventgrid_system_topic" "rm_subscription" {
 }
 
 resource "azurerm_eventgrid_system_topic_event_subscription" "to_function" {
-  count = var.function_zip_path != null ? 1 : 0
+  count = var.enable_eventgrid_subscription ? 1 : 0
 
   name                = "evgs-${local.resource_suffix}"
   system_topic        = azurerm_eventgrid_system_topic.rm_subscription.name
@@ -29,6 +29,4 @@ resource "azurerm_eventgrid_system_topic_event_subscription" "to_function" {
   azure_function_endpoint {
     function_id = "${azurerm_function_app_flex_consumption.func.id}/functions/${var.eventgrid_function_name}"
   }
-
-  depends_on = [null_resource.function_deploy]
 }
