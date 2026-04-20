@@ -1,26 +1,30 @@
+variable "workload" {
+  description = "Workload name used in resource naming."
+  type        = string
+  default     = "powertoggle"
+}
+
+variable "environment" {
+  description = "Environment token (dev, uat, prd)."
+  type        = string
+}
+
 variable "location" {
   description = "Azure region."
   type        = string
+  default     = "uksouth"
 }
 
-variable "resource_group_name" {
-  description = "Resource group name."
+variable "location_short" {
+  description = "Short region token used in resource naming (e.g. uks)."
   type        = string
+  default     = "uks"
 }
 
-variable "name_prefix" {
+variable "instance" {
+  description = "Instance index used in resource naming (e.g. 01)."
   type        = string
-  description = "Prefix for most resources (hyphens allowed)."
-}
-
-variable "storage_prefix" {
-  type        = string
-  description = "Storage-account-safe prefix: 3-20 chars, lowercase letters and numbers only."
-
-  validation {
-    condition     = can(regex("^[a-z0-9]{3,20}$", var.storage_prefix))
-    error_message = "storage_prefix must be 3–20 chars, lowercase letters and numbers only."
-  }
+  default     = "01"
 }
 
 variable "storage_replication_type" {
@@ -29,20 +33,16 @@ variable "storage_replication_type" {
   default     = "LRS"
 }
 
-variable "storage_container_name" {
-  description = "Blob container name for function files."
-  type        = string
-  default     = "function-files"
-}
-
 variable "runtime_name" {
   description = "Flex runtime name: dotnet-isolated, java, node, powershell, python."
   type        = string
+  default     = "node"
 }
 
 variable "runtime_version" {
   description = "Flex runtime version (stack-specific)."
   type        = string
+  default     = "22"
 }
 
 variable "maximum_instance_count" {
@@ -72,15 +72,17 @@ variable "allow_drift_minutes" {
 variable "eventgrid_included_event_types" {
   description = "Optional list of included event types."
   type        = list(string)
-  default     = []
+  default     = ["Microsoft.Resources.ResourceWriteSuccess"]
 }
 
 variable "eventgrid_function_name" {
   description = "Azure Function name (the function inside the app) that has the EventGridTrigger."
   type        = string
+  default     = "TagIngest"
 }
 
-variable "enable_eventgrid_subscription" {
-  type    = bool
-  default = false
+variable "function_zip_path" {
+  description = "Local path to the function app zip package. When set, code is deployed and the Event Grid subscription is created."
+  type        = string
+  default     = null
 }

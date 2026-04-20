@@ -1,13 +1,15 @@
 resource "azurerm_storage_account" "sa" {
-  name                     = local.storage_account_name
+  name                     = "st${local.resource_suffix_flat}"
   resource_group_name      = azurerm_resource_group.rg.name
   location                 = azurerm_resource_group.rg.location
   account_tier             = "Standard"
   account_replication_type = var.storage_replication_type
+
+  tags = local.tags
 }
 
 resource "azurerm_storage_container" "files" {
-  name                  = var.storage_container_name
+  name                  = "function-files"
   storage_account_id    = azurerm_storage_account.sa.id
   container_access_type = "private"
 }
