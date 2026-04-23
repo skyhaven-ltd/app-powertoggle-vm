@@ -7,8 +7,8 @@ on:
       - "minor/**"
       - "patch/**"
     paths:
-      - "infra-base/**"
-      - "infra-eventgrid/**"
+      - "infra/base/**"
+      - "infra/eventgrid/**"
   workflow_dispatch:
     inputs:
       env:
@@ -66,7 +66,7 @@ jobs:
           TF_ENV: ${{ inputs.env || 'dev' }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          terraform -chdir=infra-base init \
+          terraform -chdir=infra/base init \
             -backend-config="resource_group_name=rg-tfs-platform-$TF_ENV-uks-01" \
             -backend-config="storage_account_name=sttfsplatform${TF_ENV}uks01" \
             -backend-config="container_name=$REPO_NAME" \
@@ -78,7 +78,7 @@ jobs:
           TF_ENV: ${{ inputs.env || 'dev' }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          terraform -chdir=infra-eventgrid init \
+          terraform -chdir=infra/eventgrid init \
             -backend-config="resource_group_name=rg-tfs-platform-$TF_ENV-uks-01" \
             -backend-config="storage_account_name=sttfsplatform${TF_ENV}uks01" \
             -backend-config="container_name=$REPO_NAME" \
@@ -90,7 +90,7 @@ jobs:
         env:
           TF_ENV: ${{ inputs.env || 'dev' }}
         run: |
-          terraform -chdir=infra-base plan \
+          terraform -chdir=infra/base plan \
             -var-file="vars/globals.tfvars" \
             -var-file="vars/$TF_ENV.tfvars"
 
@@ -99,7 +99,7 @@ jobs:
         env:
           TF_ENV: ${{ inputs.env || 'dev' }}
         run: |
-          terraform -chdir=infra-eventgrid plan \
+          terraform -chdir=infra/eventgrid plan \
             -var-file="vars/globals.tfvars" \
             -var-file="vars/$TF_ENV.tfvars"
 
@@ -130,7 +130,7 @@ jobs:
         env:
           TF_ENV: ${{ inputs.env || 'dev' }}
         run: |
-          terraform -chdir=infra-base apply -auto-approve \
+          terraform -chdir=infra/base apply -auto-approve \
             -var-file="vars/globals.tfvars" \
             -var-file="vars/$TF_ENV.tfvars"
 
@@ -147,8 +147,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          RESOURCE_GROUP_NAME="$(terraform -chdir=infra-base output -raw resource_group_name)"
-          FUNCTION_APP_NAME="$(terraform -chdir=infra-base output -raw function_app_name)"
+          RESOURCE_GROUP_NAME="$(terraform -chdir=infra/base output -raw resource_group_name)"
+          FUNCTION_APP_NAME="$(terraform -chdir=infra/base output -raw function_app_name)"
 
           az functionapp deployment source config-zip \
             --resource-group "$RESOURCE_GROUP_NAME" \
@@ -160,8 +160,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          RG="$(terraform -chdir=infra-base output -raw resource_group_name)"
-          APP="$(terraform -chdir=infra-base output -raw function_app_name)"
+          RG="$(terraform -chdir=infra/base output -raw resource_group_name)"
+          APP="$(terraform -chdir=infra/base output -raw function_app_name)"
           SUB_ID="$(az account show --query id -o tsv)"
           FUNC_NAME="$EVENTGRID_FUNCTION_NAME"
 
@@ -184,7 +184,7 @@ jobs:
         env:
           TF_ENV: ${{ inputs.env || 'dev' }}
         run: |
-          terraform -chdir=infra-eventgrid apply -auto-approve \
+          terraform -chdir=infra/eventgrid apply -auto-approve \
             -var-file="vars/globals.tfvars" \
             -var-file="vars/$TF_ENV.tfvars"
 
@@ -193,7 +193,7 @@ jobs:
         env:
           TF_ENV: ${{ inputs.env || 'dev' }}
         run: |
-          terraform -chdir=infra-eventgrid destroy -auto-approve \
+          terraform -chdir=infra/eventgrid destroy -auto-approve \
             -var-file="vars/globals.tfvars" \
             -var-file="vars/$TF_ENV.tfvars"
 
@@ -202,7 +202,7 @@ jobs:
         env:
           TF_ENV: ${{ inputs.env || 'dev' }}
         run: |
-          terraform -chdir=infra-base destroy -auto-approve \
+          terraform -chdir=infra/base destroy -auto-approve \
             -var-file="vars/globals.tfvars" \
             -var-file="vars/$TF_ENV.tfvars"
 
