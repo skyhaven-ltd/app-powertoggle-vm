@@ -11,7 +11,7 @@ PowerToggle VM automatically starts and deallocates Azure VMs on a schedule defi
 - `functions/src/` — Azure Functions app for tag-change ingestion and scheduled VM actions.
 - `infra/base/` — Terraform for core function app, storage, Event Grid, RBAC, and resource groups.
 - `infra/eventgrid/` — Terraform for Event Grid subscription wiring.
-- `.github/workflows/` — linting, Terraform, and tagging workflows.
+- `.github/workflows/` — lint, PR validation, Terraform deploy, and tagging workflows, consuming the shared reusable workflows and composite actions from `skyhaven-ltd/pipeline-engineering-github-actions` (SHA-pinned). PR validation runs each stack (`infra/base`, `infra/eventgrid`) through the shared `reusable-terraform.yml` with its own `state_key`.
 
 ## Common Commands
 
