@@ -17,6 +17,7 @@ DISABLE_LINTERS:
   - REPOSITORY_SECRETLINT # gitleaks covers secret scanning
   - REPOSITORY_TRUFFLEHOG # gitleaks covers secret scanning
   - SPELL_CSPELL
+  - SPELL_LYCHEE # link checker trips on templated az rest URLs in workflows
   - MARKDOWN_MARKDOWN_TABLE_FORMATTER
   - MARKDOWN_MARKDOWNLINT
   - COPYPASTE_JSCPD
