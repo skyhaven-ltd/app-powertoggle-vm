@@ -32,15 +32,11 @@ permissions:
   contents: read
   id-token: write
 
-# Serialise runs so a merge-triggered apply never races another apply or a
-# feature-branch plan for the same state.
 concurrency:
   group: terraform-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  # Pushes to main (merged PRs) apply to prd automatically; feature-branch
-  # pushes plan against dev; workflow_dispatch overrides both.
   Terraform:
     name: "Terraform ${{ inputs.terraform_action || (github.ref == 'refs/heads/main' && 'apply' || 'plan') }} (${{ inputs.env || (github.ref == 'refs/heads/main' && 'prd' || 'dev') }})"
     runs-on: ubuntu-latest
@@ -55,31 +51,31 @@ jobs:
       EVENTGRID_FUNCTION_NAME: TagIngest
     steps:
       - name: "Checkout"
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
 
       - name: "Setup Terraform"
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
         with:
           terraform_version: "1.14.9"
 
       - name: "Azure Login"
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_PLATFORM_SUBSCRIPTION_ID }}
 
       - name: "Ensure State Container"
-        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/ensure-tfstate-container@6cfa143b42ff464e4101d69c09945db9fac369e5 # v2.0.0
+        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/ensure-tfstate-container@6cfa143b42ff464e4101d69c09945db9fac369e5
         with:
           storage_account_name: stplatform${{ env.TF_ENV }}uks02
           container_name: ${{ github.event.repository.name }}
           login: "false"
 
       - name: "Terraform Init - Base Stack"
-        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/terraform-backend-init@6cfa143b42ff464e4101d69c09945db9fac369e5 # v2.0.0
+        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/terraform-backend-init@6cfa143b42ff464e4101d69c09945db9fac369e5
         with:
           environment: ${{ env.TF_ENV }}
           working_directory: infra/base
@@ -88,7 +84,7 @@ jobs:
           container_name: ${{ github.event.repository.name }}
 
       - name: "Terraform Init - Event Grid Stack"
-        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/terraform-backend-init@6cfa143b42ff464e4101d69c09945db9fac369e5 # v2.0.0
+        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/terraform-backend-init@6cfa143b42ff464e4101d69c09945db9fac369e5
         with:
           environment: ${{ env.TF_ENV }}
           working_directory: infra/eventgrid
@@ -112,7 +108,7 @@ jobs:
 
       - name: "Setup Node"
         if: env.TF_ACTION == 'apply'
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22.x"
 
@@ -139,11 +135,9 @@ jobs:
             -var-file="vars/globals.tfvars" \
             -var-file="vars/${TF_ENV}.tfvars"
 
-      # Re-login against the workload subscription for the function app
-      # deployment; state operations above use the platform subscription.
       - name: "Azure Login - Workload Subscription"
         if: env.TF_ACTION == 'apply'
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -209,7 +203,7 @@ jobs:
 
       - name: "Break State Lease - Event Grid Stack"
         if: always()
-        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/break-tfstate-lease@6cfa143b42ff464e4101d69c09945db9fac369e5 # v2.0.0
+        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/break-tfstate-lease@6cfa143b42ff464e4101d69c09945db9fac369e5
         with:
           storage_account_name: stplatform${{ env.TF_ENV }}uks02
           container_name: ${{ github.event.repository.name }}
@@ -218,7 +212,7 @@ jobs:
 
       - name: "Break State Lease - Base Stack"
         if: always()
-        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/break-tfstate-lease@6cfa143b42ff464e4101d69c09945db9fac369e5 # v2.0.0
+        uses: skyhaven-ltd/pipeline-engineering-github-actions/actions/break-tfstate-lease@6cfa143b42ff464e4101d69c09945db9fac369e5
         with:
           storage_account_name: stplatform${{ env.TF_ENV }}uks02
           container_name: ${{ github.event.repository.name }}
